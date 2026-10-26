@@ -227,7 +227,8 @@ class SignupPage extends React.Component {
             name: '',
             email: '',
             plan: 'free',
-            showNewsletterSelection: false
+            showNewsletterSelection: false,
+            termsCheckboxChecked: false
         };
     }
 
@@ -263,14 +264,23 @@ class SignupPage extends React.Component {
         clearTimeout(this.timeoutId);
     }
 
-    handleSignup(e) {
-        const {site, onAction} = this.context;
-        e.preventDefault();
+    getFormErrors(state) {
+        const checkboxRequired = this.context.site.portal_signup_checkbox_required;
+        const checkboxError = checkboxRequired && !state.termsCheckboxChecked;
+
+        return {
+            ...ValidateInputForm({fields: this.getInputFields({state})}),
+            checkbox: checkboxError
+        };
+    }
+
+    doSignup() {
         this.setState((state) => {
             return {
-                errors: ValidateInputForm({fields: this.getInputFields({state})})
+                errors: this.getFormErrors(state)
             };
         }, () => {
+            const {site, onAction} = this.context;
             const {name, email, plan, errors} = this.state;
             const hasFormErrors = (errors && Object.values(errors).filter(d => !!d).length > 0);
             if (!hasFormErrors) {
@@ -290,30 +300,15 @@ class SignupPage extends React.Component {
         });
     }
 
+    handleSignup(e) {
+        e.preventDefault();
+        this.doSignup();
+    }
+
     handleChooseSignup(e, plan) {
         e.preventDefault();
-        this.setState((state) => {
-            return {
-                errors: ValidateInputForm({fields: this.getInputFields({state})})
-            };
-        }, () => {
-            const {onAction, site} = this.context;
-            const {name, email, errors} = this.state;
-            const hasFormErrors = (errors && Object.values(errors).filter(d => !!d).length > 0);
-            if (!hasFormErrors) {
-                if (hasMultipleNewsletters({site})) {
-                    this.setState({
-                        showNewsletterSelection: true,
-                        pageData: {name, email, plan},
-                        errors: {}
-                    });
-                } else {
-                    onAction('signup', {name, email, plan});
-                    this.setState({
-                        errors: {}
-                    });
-                }
-            }
+        this.setState({plan}, () => {
+            this.doSignup();
         });
     }
 
@@ -396,6 +391,41 @@ class SignupPage extends React.Component {
             });
         }
         return fields;
+    }
+
+    renderSignupTerms() {
+        const {site} = this.context;
+        if (site.portal_signup_terms_html === null || site.portal_signup_terms_html === '') {
+            return null;
+        }
+
+        const handleCheckboxChange = (e) => {
+            this.setState({
+                termsCheckboxChecked: e.target.checked
+            });
+        };
+
+        const checkbox = site.portal_signup_checkbox_required ? (
+            <input
+                type="checkbox"
+                checked={!!this.state.termsCheckboxChecked}
+                required={true}
+                onChange={handleCheckboxChange}
+            />
+        ) : null;
+
+        const errorClassName = this.state.errors?.checkbox ? 'gh-portal-error' : '';
+
+        const className = `gh-portal-signup-terms ${errorClassName}`;
+
+        return (
+            <div className={className}>
+                {checkbox}
+                <div className="gh-portal-signup-terms-content"
+                    dangerouslySetInnerHTML={{__html: site.portal_signup_terms_html}}
+                ></div>
+            </div>
+        );
     }
 
     renderSubmitButton() {
@@ -537,6 +567,7 @@ class SignupPage extends React.Component {
                     </div>
                     <div>
                         {this.renderProducts()}
+                        {this.renderSignupTerms()}
 
                         {(hasOnlyFree ?
                             <div className={'gh-portal-btn-container' + (sticky ? ' sticky m24' : '')}>
